@@ -2,14 +2,20 @@ __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
+
+
+# Data and models
 runs/
+models/
+!models/.gitkeep
 data/
 *.parquet
 .env
 
+
 .DS_Store
 .idea
-
+unsloth_compiled_cache
 
 # AI
 tasks

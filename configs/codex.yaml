@@ -4,7 +4,7 @@
 # (oppure --format unsloth per dataset grandi, shardati su più file: il glob sotto
 # copre entrambi i casi).
 
-name: qwen3.5-somebaby
+name: qwen3.5-codex
 
 data:
   train_files: "data/*_train*.parquet"
@@ -17,7 +17,7 @@ model:
   # Unsloth sconsiglia esplicitamente QLoRA 4-bit su Qwen3.5: quantizzazione nativa
   # 16-bit di default (vedi la guida ufficiale unsloth.ai/docs/models/qwen3.5/fine-tune).
   load_in_4bit: false
-  max_seq_length: 2048
+  max_seq_length: 4096
 
 lora:
   # false = full fine-tuning (nessun adapter, tutti i pesi allenabili). Vedi README
@@ -31,9 +31,9 @@ lora:
   target_modules: null
 
 training:
-  output_dir: "runs/default"
-  num_train_epochs: 1.0
-  per_device_train_batch_size: 2
+  output_dir: "models/codex"
+  num_train_epochs: 2.0
+  per_device_train_batch_size: 8
   gradient_accumulation_steps: 4
   learning_rate: 0.0002
   warmup_ratio: 0.03

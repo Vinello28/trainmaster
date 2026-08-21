@@ -1,9 +1,44 @@
 # trainmaster — fine-tuning e validazione automatizzati di piccoli Vision-LLM
 
+[![CI](https://github.com/Vinello28/trainmaster/actions/workflows/ci.yml/badge.svg)](https://github.com/Vinello28/trainmaster/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)
+![uv](https://img.shields.io/badge/uv-package%20manager-DE5FE9)
+![PyTorch](https://img.shields.io/badge/PyTorch-CUDA%2013.2-EE4C2C?logo=pytorch&logoColor=white)
+![Unsloth](https://img.shields.io/badge/Unsloth-fine--tuning-F97316)
+![Hugging Face](https://img.shields.io/badge/Hugging%20Face-Hub-FFD21E)
+![pytest](https://img.shields.io/badge/pytest-tested-0A9EDC?logo=pytest&logoColor=white)
+
 Automatizza il fine-tuning (via [Unsloth](https://unsloth.ai/)) e la validazione di
 piccoli Vision-LLM open source su un task di estrazione documentale immagine → JSON
 strutturato. Modello target: [`Qwen/Qwen3.5-0.8B`](https://huggingface.co/Qwen/Qwen3.5-0.8B),
 un VLM nativo unificato (early-fusion testo+visione in un'unica architettura).
+
+## Caratteristiche
+
+- **Fine-tuning LoRA o full**, via Unsloth `FastLanguageModel` — un `--set` per passare
+  dall'uno all'altro.
+- **Validazione semantica**, non solo loss: confronto JSON campo-per-campo, con
+  strategia di scoring diversa per tipo di documento (Strategy + registry).
+- **Report HTML** predizioni vs ground truth, immagini incluse, ordinato per errore.
+- **Testabile senza GPU**: `config`/`data`/`scoring`/`report`/`pipeline` non importano
+  mai `torch`/`unsloth` — l'intera suite gira su CI standard.
+- **Config YAML riproducibili**, override puntuali da CLI, nessuno stato nascosto.
+- **Pubblicazione one-shot su Hugging Face Hub**, model card generata dai metadati del run.
+
+## Indice
+
+- [Relazione con synThor](#relazione-con-synthor)
+- [Struttura del progetto](#struttura-del-progetto)
+- [Installazione](#installazione)
+- [Quickstart](#quickstart)
+- [LoRA vs full fine-tuning](#lora-vs-full-fine-tuning)
+- [Configurazione di un run](#configurazione-di-un-run)
+- [Output di un run](#output-di-un-run)
+- [Metodologia di scoring](#metodologia-di-scoring)
+- [Architettura](#architettura)
+- [Pubblicazione su Hugging Face](#pubblicazione-su-hugging-face)
+- [Limiti noti](#limiti-noti)
+- [Test](#test)
 
 ## Relazione con synThor
 
@@ -33,7 +68,7 @@ trainmaster/
     cli/                                                        # entry point installati (vedi sotto)
   configs/                # RunConfig di esempio (YAML)
   tests/
-  .github/workflows/      # CI (pytest) + pubblicazione HF
+  .github/workflows/      # CI (pytest, no GPU) — la pubblicazione HF è manuale, vedi sotto
 ```
 
 Nessuno script alla radice: le CLI sono entry point installati (`[project.scripts]` in
@@ -100,7 +135,9 @@ Internamente `lora.enabled=false` passa `full_finetuning=True` a
 `get_peft_model`. Serve più VRAM del LoRA equivalente; su un modello da 0.8B resta comunque
 alla portata di una singola GPU consumer.
 
-## Anatomia di una config (`configs/default.yaml`)
+## Configurazione di un run
+
+`configs/default.yaml`:
 
 ```yaml
 name: qwen3.5-manifest-extraction
@@ -174,35 +211,34 @@ inietta `model_loader`/`trainer_builder`/`inference_runner` fake e verifica che
 dalla CI (`.github/workflows/ci.yml`): la suite gira su un runner GitHub-hosted standard,
 senza GPU.
 
-## Pubblicazione su Hugging Face (CI/CD, Trusted Publisher)
+## Pubblicazione su Hugging Face
 
-`.github/workflows/publish.yml` pubblica un checkpoint già addestrato in locale su un
-repo Hugging Face, **senza salvare alcun token**: usa i
-[Trusted Publishers](https://huggingface.co/docs/hub/trusted-publishers) di HF, uno
-scambio OIDC fra GitHub Actions e l'endpoint `/oauth/token` di HF che restituisce un
-token scoperto al singolo repo, valido un'ora. Il training resta un comando locale
-(`trainmaster-train`); il workflow è solo pubblicazione, a trigger manuale.
+Pubblicazione manuale da terminale, non da CI: niente runner self-hosted da installare
+e mantenere, al prezzo di un token salvato in locale invece che a vita breve. La CLI
+ufficiale `hf` è già disponibile nel venv del progetto (dipendenza transitiva di
+`datasets`), non serve installarla a parte.
 
 **Setup una tantum**:
 
 1. Crea il repo modello su huggingface.co (es. `<tuo-username>/<nome-modello>`).
-2. Su quel repo: **Settings → Trusted Publishers → Add** → provider "GitHub Actions",
-   claim `repository = <owner>/<repo-github>`, `workflow = publish.yml` (e
-   opzionalmente `branch = main` se il dispatch parte sempre da lì).
-3. Sul repo GitHub: **Settings → Secrets and variables → Actions → Variables → New
-   repository variable** → nome `HF_REPO_ID`, valore il repo id scelto al punto 1
-   (è una variabile, non un secret: non è sensibile).
-4. Registra un **runner self-hosted** sulla macchina con la GPU: repo GitHub →
-   **Settings → Actions → Runners → New self-hosted runner**, segui i comandi che
-   GitHub mostra per il tuo OS. È necessario perché il job deve vedere
-   `runs/<name>/checkpoint/` sullo stesso filesystem dove hai allenato — i runner
-   ospitati da GitHub non hanno accesso al tuo disco locale né una GPU.
-5. `uv sync --extra train` sulla stessa macchina, poi alleni come sempre in locale.
-6. Dalla tab **Actions** del repo GitHub, lanci manualmente "Publish to Hugging Face"
-   indicando `run_dir` (es. `runs/default`).
+2. Crea un access token con scope **write**: huggingface.co → Settings → Access Tokens.
+3. `uv run hf auth login` e incolla il token — resta salvato nella cache locale di
+   `huggingface_hub` (`~/.cache/huggingface/token`), non nel repo.
 
-Il workflow genera prima la model card (`trainmaster-model-card`, da `config.yaml` +
-`eval/metrics.json` del run) e poi carica `checkpoint/` con la CLI ufficiale `hf upload`.
+**Dopo ogni training**:
+
+```bash
+uv run trainmaster-model-card --run-dir runs/default   # genera checkpoint/README.md
+uv run hf upload <tuo-username>/<nome-modello> runs/default/checkpoint .
+```
+
+`trainmaster-model-card` legge `config.yaml` e (se presente) `eval/metrics.json` del run
+e scrive la model card con iperparametri e metriche di validazione; `hf upload` carica
+`checkpoint/` così com'è.
+
+Restano su GitHub Actions (`.github/workflows/ci.yml`) solo i test, che non richiedono
+GPU né accesso alla tua macchina — l'unica parte di CI/CD che vale la pena automatizzare
+qui, dato che pubblicazione e training restano comandi locali.
 
 ## Limiti noti
 

@@ -1,12 +1,13 @@
 """CLI sottile: genera la model card in ``<run_dir>/checkpoint/README.md`` da
 ``<run_dir>/config.yaml`` e, se presente, ``<run_dir>/eval/metrics.json``.
 
-Usato dal workflow ``.github/workflows/publish.yml`` prima di ``hf upload``: nessuna
-chiamata di rete qui, solo file locali.
+Passo che precede ``hf upload`` nella pubblicazione manuale su Hugging Face (vedi
+README.md#pubblicazione-su-hugging-face): nessuna chiamata di rete qui, solo file locali.
 
 Esempio::
 
     uv run trainmaster-model-card --run-dir runs/default
+    hf upload <namespace>/<nome-modello> runs/default/checkpoint .
 """
 
 from __future__ import annotations

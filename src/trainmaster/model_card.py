@@ -1,9 +1,10 @@
 """Genera la model card (README.md) per la pubblicazione su Hugging Face Hub.
 
 Nessuna dipendenza da ``torch``/``unsloth``/rete: legge solo ``RunConfig`` e
-l'eventuale ``eval/metrics.json`` già scritti su disco da ``pipeline.py``. Usato dal
-workflow ``.github/workflows/publish.yml`` (tramite ``cli/publish_model_card.py``)
-prima dello step che carica su Hugging Face con ``hf upload``.
+l'eventuale ``eval/metrics.json`` già scritti su disco da ``pipeline.py``. Usato da
+``cli/publish_model_card.py`` nel flusso di pubblicazione manuale (vedi
+README.md#pubblicazione-su-hugging-face): genera ``checkpoint/README.md`` prima che
+l'utente lanci ``hf upload`` da terminale.
 """
 
 from __future__ import annotations
