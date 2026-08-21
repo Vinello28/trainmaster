@@ -2,9 +2,9 @@
 
 Esempi::
 
-    python train.py --config configs/default.yaml
-    python train.py --config configs/default.yaml --set training.learning_rate=1e-4
-    python train.py --config configs/smoke_test.yaml --skip-eval
+    uv run trainmaster-train --config configs/default.yaml
+    uv run trainmaster-train --config configs/default.yaml --set training.learning_rate=1e-4
+    uv run trainmaster-train --config configs/smoke_test.yaml --skip-eval
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from trainmaster.pipeline import run, run_training
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="train.py",
+        prog="trainmaster-train",
         description="Addestra un Vision-LLM con Unsloth secondo una RunConfig YAML.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )

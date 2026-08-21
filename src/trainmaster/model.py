@@ -6,16 +6,27 @@ Tutti gli import pesanti stanno **dentro il corpo delle funzioni**, mai a livell
 come default dei parametri di dependency injection) restando eseguibile senza GPU/CUDA
 installati — requisito verificato da ``tests/test_pipeline.py``.
 
-Rischio noto da riverificare in esecuzione (segnalato nel piano): le API vision di
-Unsloth/trl (``FastVisionModel.get_peft_model``, ``UnslothVisionDataCollator``, i campi
-di ``SFTConfig`` per il training vision) possono cambiare fra versioni. Il codice sotto
-rispecchia il workflow documentato da Unsloth per il fine-tuning vision al momento della
-scrittura; va riverificato contro la versione effettivamente installata (uno smoke test
-manuale col notebook ufficiale Unsloth vision è il modo più rapido).
+Modello target: ``Qwen/Qwen3.5-0.8B``, un VLM nativo *unificato* (early-fusion
+testo+visione in un'unica architettura, non una famiglia separata "-VL" come
+Qwen2.5-VL/Qwen3-VL). La guida ufficiale Unsloth per Qwen3.5
+(``unsloth.ai/docs/models/qwen3.5/fine-tune``) carica questa famiglia con
+``FastLanguageModel`` (non ``FastVisionModel``) e passa ``full_finetuning`` come
+parametro diretto di ``from_pretrained`` — è così che si ottiene il full fine-tuning
+invece del LoRA, senza doverlo dedurre dall'assenza di un adapter.
+
+Rischio noto, non nascosto: la documentazione ufficiale mostra ``from_pretrained`` e
+``get_peft_model`` per Qwen3.5, ma non il codice esatto del trainer/collator per il ramo
+vision. ``build_trainer`` sotto usa ``SFTTrainer`` + ``UnslothVisionDataCollator``
+(la combinazione documentata per il fine-tuning multimodale in generale, coerente col
+formato conversazioni prodotto da ``data.build_conversations``), ma è il punto di
+maggiore incertezza residua — un issue GitHub aperto (``unslothai/unsloth#5845``)
+conferma che "Qwen3.5 vision + full_finetuning" è un percorso recente. Verificare con
+uno smoke test reale (``configs/smoke_test.yaml``) prima di un run lungo.
 """
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -26,6 +37,19 @@ if TYPE_CHECKING:
     from trainmaster.config import LoraConfig, ModelConfig, TrainingConfig
 
 __all__ = ["UnslothModelHandle", "load_model", "build_trainer"]
+
+#: Target LoRA standard per Qwen3.5 (guida ufficiale Unsloth): nessuna distinzione
+#: vision/language layer come nella vecchia API FastVisionModel — l'architettura
+#: unificata non ha una vision tower separata da targetizzare a parte.
+_DEFAULT_TARGET_MODULES = (
+    "q_proj",
+    "k_proj",
+    "v_proj",
+    "o_proj",
+    "gate_proj",
+    "up_proj",
+    "down_proj",
+)
 
 
 @dataclass
@@ -38,12 +62,26 @@ class UnslothModelHandle:
     model_config: "ModelConfig"
 
     def generate(self, image: "Image", instruction: str, *, max_new_tokens: int) -> str:
+        # L'immagine viaggia dentro i messaggi: apply_chat_template gestisce insieme
+        # tokenizzazione e preprocessing immagine, indipendentemente dalla classe
+        # esatta di processor restituita da FastLanguageModel per un modello
+        # multimodale nativo (più robusto della chiamata separata
+        # processor(image, prompt, ...) usata dalla vecchia API FastVisionModel).
         messages = [
-            {"role": "user", "content": [{"type": "image"}, {"type": "text", "text": instruction}]}
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image", "image": image},
+                    {"type": "text", "text": instruction},
+                ],
+            }
         ]
-        prompt = self.processor.apply_chat_template(messages, add_generation_prompt=True)
-        inputs = self.processor(
-            image, prompt, add_special_tokens=False, return_tensors="pt"
+        inputs = self.processor.apply_chat_template(
+            messages,
+            add_generation_prompt=True,
+            tokenize=True,
+            return_dict=True,
+            return_tensors="pt",
         ).to(self.model.device)
         input_length = inputs["input_ids"].shape[-1]
         output_ids = self.model.generate(**inputs, max_new_tokens=max_new_tokens, use_cache=True)
@@ -65,40 +103,50 @@ def load_model(
     checkpoint: Path | None = None,
     seed: int = 0,
 ) -> UnslothModelHandle:
-    """Carica il modello base (o un checkpoint salvato, per la valutazione) e prepara
-    LoRA quando ``for_training=True``.
+    """Carica il modello base (o un checkpoint salvato, per la valutazione).
 
     ``checkpoint`` sovrascrive ``model_config.model_id`` come sorgente: Unsloth rileva
     da solo un adapter LoRA salvato in quella directory (``adapter_config.json``).
+
+    ``lora.enabled=False`` (con ``for_training=True``) richiede il full fine-tuning
+    tramite ``full_finetuning=True`` su ``from_pretrained``: nessun adapter viene
+    applicato, tutti i pesi restano allenabili.
     """
-    from unsloth import FastVisionModel
+    from unsloth import FastLanguageModel
 
     source = str(checkpoint) if checkpoint is not None else model_config.model_id
-    model, processor = FastVisionModel.from_pretrained(
+    full_finetuning = for_training and lora is not None and not lora.enabled
+
+    if for_training and model_config.load_in_4bit:
+        warnings.warn(
+            "Unsloth sconsiglia esplicitamente QLoRA 4-bit su Qwen3.5; "
+            "considera model.load_in_4bit=false (il default del progetto)."
+        )
+
+    model, processor = FastLanguageModel.from_pretrained(
         source,
+        max_seq_length=model_config.max_seq_length,
         load_in_4bit=model_config.load_in_4bit,
-        use_gradient_checkpointing="unsloth" if for_training else False,
+        load_in_16bit=not model_config.load_in_4bit,
+        full_finetuning=full_finetuning,
     )
 
-    if for_training:
+    if for_training and not full_finetuning:
         if lora is None:
             raise ValueError("for_training=True richiede una LoraConfig")
-        model = FastVisionModel.get_peft_model(
+        model = FastLanguageModel.get_peft_model(
             model,
-            finetune_vision_layers=model_config.finetune_vision_layers,
-            finetune_language_layers=model_config.finetune_language_layers,
-            finetune_attention_modules=model_config.finetune_attention_modules,
-            finetune_mlp_modules=model_config.finetune_mlp_modules,
             r=lora.r,
             lora_alpha=lora.alpha,
             lora_dropout=lora.dropout,
-            target_modules=list(lora.target_modules) if lora.target_modules else None,
+            target_modules=list(lora.target_modules) if lora.target_modules else list(_DEFAULT_TARGET_MODULES),
             bias="none",
+            use_gradient_checkpointing="unsloth",
             random_state=seed,
+            max_seq_length=model_config.max_seq_length,
         )
-        FastVisionModel.for_training(model)
-    else:
-        FastVisionModel.for_inference(model)
+    elif not for_training:
+        FastLanguageModel.for_inference(model)
 
     return UnslothModelHandle(model=model, processor=processor, model_config=model_config)
 
@@ -114,7 +162,8 @@ def build_trainer(
     ``dataset_kwargs={"skip_prepare_dataset": True}`` e ``remove_unused_columns=False``
     sono richiesti dal workflow vision documentato da Unsloth: il collator riceve le
     conversazioni grezze (lista di dict, non un ``datasets.Dataset`` con schema fisso,
-    vedi ``data.build_conversations``) e le prepara lui stesso per il modello.
+    vedi ``data.build_conversations``) e le prepara lui stesso per il modello. Vedi la
+    nota di modulo sull'incertezza residua di questa combinazione per Qwen3.5.
     """
     from trl import SFTConfig, SFTTrainer
     from unsloth.trainer import UnslothVisionDataCollator

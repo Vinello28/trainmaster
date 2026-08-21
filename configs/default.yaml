@@ -4,7 +4,7 @@
 # (oppure --format unsloth per dataset grandi, shardati su più file: il glob sotto
 # copre entrambi i casi).
 
-name: codex
+name: qwen3.5-manifest-extraction
 
 data:
   train_files: "data/*_train*.parquet"
@@ -13,21 +13,21 @@ data:
   seed: 0
 
 model:
-  # TODO: verificare che questo model_id sia disponibile per FastVisionModel.from_pretrained
-  # nella versione di unsloth installata. "qwen3.5 0.8B" non è un repo id verificabile:
-  # questo è il piccolo Qwen-VL più vicino tra quelli noti come supportati da Unsloth.
-  model_id: "unsloth/Qwen2-VL-2B-Instruct-bnb-4bit"
-  load_in_4bit: true
+  model_id: "Qwen/Qwen3.5-0.8B"
+  # Unsloth sconsiglia esplicitamente QLoRA 4-bit su Qwen3.5: quantizzazione nativa
+  # 16-bit di default (vedi la guida ufficiale unsloth.ai/docs/models/qwen3.5/fine-tune).
+  load_in_4bit: false
   max_seq_length: 2048
-  finetune_vision_layers: true
-  finetune_language_layers: true
-  finetune_attention_modules: true
-  finetune_mlp_modules: true
 
 lora:
+  # false = full fine-tuning (nessun adapter, tutti i pesi allenabili). Vedi README
+  # per come passare a full fine-tuning con --set lora.enabled=false.
+  enabled: true
   r: 16
   alpha: 16
   dropout: 0.0
+  # null = usa la lista standard di moduli Qwen (q/k/v/o_proj, gate/up/down_proj)
+  # definita in trainmaster/model.py.
   target_modules: null
 
 training:

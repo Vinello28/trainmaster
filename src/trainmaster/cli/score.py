@@ -4,7 +4,7 @@ iterare sulla logica di scoring/report senza rieseguire l'inferenza.
 
 Esempio::
 
-    python score.py --predictions runs/default/eval/predictions.parquet -c configs/default.yaml
+    uv run trainmaster-score --predictions runs/default/eval/predictions.parquet -c configs/default.yaml
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from trainmaster.inference import load_predictions
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="score.py",
+        prog="trainmaster-score",
         description="Punteggia un predictions.parquet e (ri)produce il report, senza GPU.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )

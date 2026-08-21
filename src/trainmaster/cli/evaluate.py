@@ -2,7 +2,7 @@
 
 Esempio::
 
-    python evaluate.py --config configs/default.yaml --checkpoint runs/default/checkpoint
+    uv run trainmaster-evaluate --config configs/default.yaml --checkpoint runs/default/checkpoint
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from trainmaster.pipeline import run_evaluation
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="evaluate.py",
+        prog="trainmaster-evaluate",
         description=(
             "Valuta un checkpoint già addestrato: genera predizioni sulla validazione, "
             "punteggia e produce il report."

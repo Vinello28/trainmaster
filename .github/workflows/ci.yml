@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.12"
+
+      # Core CPU-safe: nessuna GPU richiesta, l'extra 'train' non viene installato qui.
+      - run: uv sync
+
+      - run: uv run pytest tests/ -v

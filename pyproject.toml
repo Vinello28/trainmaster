@@ -11,13 +11,20 @@ dependencies = [
     "tqdm>=4.66.0",
 ]
 
+[project.scripts]
+trainmaster-train = "trainmaster.cli.train:main"
+trainmaster-evaluate = "trainmaster.cli.evaluate:main"
+trainmaster-score = "trainmaster.cli.score:main"
+trainmaster-model-card = "trainmaster.cli.publish_model_card:main"
+
 [project.optional-dependencies]
 # Stack GPU per addestramento/inferenza reale. Separato dal core perché dipende
-# dalla piattaforma CUDA dell'utente (torch va spesso installato con un extra-index-url
-# specifico) e non serve per eseguire config/data/scoring/report/pipeline né la test suite.
-# Vedi https://unsloth.ai/docs per l'installazione consigliata di unsloth/torch.
+# dalla piattaforma CUDA dell'utente e non serve per eseguire config/data/scoring/
+# report/pipeline né la test suite. torch/torchvision arrivano dall'indice CUDA
+# esplicito sotto (RTX 5070 Ti / Blackwell -> cu132); il resto da PyPI.
 train = [
-    "torch>=2.3.0",
+    "torch",
+    "torchvision",
     "unsloth",
     "trl>=0.9.6",
     "transformers>=4.45.0",
@@ -30,6 +37,21 @@ dev = [
     "pytest>=8.0.0",
 ]
 
+[tool.uv.sources]
+torch = { index = "pytorch-cu132" }
+torchvision = { index = "pytorch-cu132" }
+
+[[tool.uv.index]]
+name = "pytorch-cu132"
+url = "https://download.pytorch.org/whl/cu132"
+# explicit = true: questo indice serve SOLO per i pacchetti mappati sopra in
+# [tool.uv.sources] (torch/torchvision). Senza questo flag uv proverebbe a risolvere
+# anche le altre dipendenze da qui, con risultati imprevedibili.
+explicit = true
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/trainmaster"]

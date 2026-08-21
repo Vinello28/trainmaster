@@ -45,23 +45,24 @@ class DataConfig:
 
 @dataclass(frozen=True)
 class ModelConfig:
-    # TODO: verificare che questo model_id sia disponibile per FastVisionModel.from_pretrained
-    # nella versione di unsloth installata. "qwen3.5 0.8B" non è un repo id verificabile:
-    # questo è il piccolo Qwen-VL più vicino tra quelli noti come supportati da Unsloth.
-    model_id: str = "unsloth/Qwen2-VL-2B-Instruct-bnb-4bit"
-    load_in_4bit: bool = True
+    model_id: str = "Qwen/Qwen3.5-0.8B"
+    #: Unsloth sconsiglia esplicitamente QLoRA 4-bit su Qwen3.5 (guida ufficiale:
+    #: "load_in_4bit=False, load_in_16bit=True") — quantizzazione nativa 16-bit di default.
+    load_in_4bit: bool = False
     max_seq_length: int = 2048
-    finetune_vision_layers: bool = True
-    finetune_language_layers: bool = True
-    finetune_attention_modules: bool = True
-    finetune_mlp_modules: bool = True
 
 
 @dataclass(frozen=True)
 class LoraConfig:
+    #: False = full fine-tuning (passato come full_finetuning a
+    #: FastLanguageModel.from_pretrained, vedi model.py): nessun adapter applicato,
+    #: tutti i pesi allenabili. Attivabile con --set lora.enabled=false.
+    enabled: bool = True
     r: int = 16
     alpha: int = 16
     dropout: float = 0.0
+    #: None = usa la lista standard di moduli Qwen definita in model.py
+    #: (q/k/v/o_proj, gate/up/down_proj — dalla guida ufficiale Unsloth per Qwen3.5).
     target_modules: tuple[str, ...] | None = None
 
 

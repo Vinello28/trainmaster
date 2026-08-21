@@ -1,0 +1,57 @@
+name: Publish to Hugging Face
+
+# Pubblica un checkpoint già addestrato in locale (uv run trainmaster-train). Non
+# addestra: il training resta un comando locale sulla macchina con la GPU. Trigger
+# manuale per scelta: un push non deve mai far girare o pubblicare nulla da solo.
+#
+# Setup richiesto (una tantum, vedi README.md#pubblicazione-su-hugging-face):
+#   1. Sul repo modello HF: Settings -> Trusted Publishers -> Add -> GitHub Actions,
+#      claim repository = <owner>/<repo>, workflow = publish.yml.
+#   2. Su questo repo GitHub: Settings -> Secrets and variables -> Actions -> Variables
+#      -> New repository variable HF_REPO_ID = <namespace>/<nome-modello-hf>.
+#   3. Un runner self-hosted registrato sulla macchina con la GPU (Settings -> Actions
+#      -> Runners -> New self-hosted runner): è lo stesso filesystem dove gira il
+#      training locale, quindi vede runs/<name>/checkpoint/ senza bisogno di caricare
+#      artefatti fra job.
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_dir:
+        description: "Cartella del run da pubblicare (contiene checkpoint/, config.yaml, eval/metrics.json)"
+        required: true
+        default: "runs/default"
+      commit_message:
+        description: "Messaggio di commit sul repo Hugging Face"
+        required: false
+        default: "Publish trainmaster checkpoint"
+
+jobs:
+  publish:
+    runs-on: self-hosted # macchina con la GPU: stesso filesystem del training locale
+
+    permissions:
+      id-token: write # richiesto per ottenere il token OIDC (Trusted Publisher)
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+
+      - name: Genera la model card
+        run: |
+          uv sync
+          uv run trainmaster-model-card --run-dir "${{ inputs.run_dir }}"
+
+      - name: Installa la CLI hf ufficiale
+        run: |
+          curl -LsSf https://hf.co/cli/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Pubblica su Hugging Face (Trusted Publisher, nessun token salvato)
+        env:
+          HF_OIDC_RESOURCE: ${{ vars.HF_REPO_ID }}
+        run: |
+          hf upload "${{ vars.HF_REPO_ID }}" "${{ inputs.run_dir }}/checkpoint" . \
+            --commit-message "${{ inputs.commit_message }}"
