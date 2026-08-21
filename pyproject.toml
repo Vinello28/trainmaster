@@ -1,0 +1,35 @@
+[project]
+name = "trainmaster"
+version = "0.1.0"
+description = "Fine-tuning e validazione automatizzati di piccoli Vision-LLM open source con Unsloth"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "PyYAML>=6.0",
+    "datasets>=3.0.0",
+    "pyarrow>=17.0.0",
+    "Pillow>=10.4.0",
+    "tqdm>=4.66.0",
+]
+
+[project.optional-dependencies]
+# Stack GPU per addestramento/inferenza reale. Separato dal core perché dipende
+# dalla piattaforma CUDA dell'utente (torch va spesso installato con un extra-index-url
+# specifico) e non serve per eseguire config/data/scoring/report/pipeline né la test suite.
+# Vedi https://unsloth.ai/docs per l'installazione consigliata di unsloth/torch.
+train = [
+    "torch>=2.3.0",
+    "unsloth",
+    "trl>=0.9.6",
+    "transformers>=4.45.0",
+    "accelerate>=0.33.0",
+    "bitsandbytes>=0.43.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

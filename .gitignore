@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+runs/
+data/
+*.parquet
+.env
+
+.DS_Store
+.idea
+
+
+# AI
+tasks
+CLAUDE.md

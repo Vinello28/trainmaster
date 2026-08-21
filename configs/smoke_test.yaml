@@ -1,0 +1,36 @@
+# Run minuscolo per iterazione manuale rapida (verificare la pipeline end-to-end su
+# poche decine di campioni prima di lanciare un run vero). Richiede comunque una GPU e
+# un dataset synThor reale: non è pensato per la CI, che copre config/data/scoring/
+# report/pipeline senza GPU tramite tests/.
+
+name: smoke-test
+
+data:
+  train_files: "data/*_train*.parquet"
+  validation_files: "data/*_validation*.parquet"
+  max_samples: 16
+  seed: 0
+
+model:
+  model_id: "unsloth/Qwen2-VL-2B-Instruct-bnb-4bit"
+  load_in_4bit: true
+  max_seq_length: 1024
+
+lora:
+  r: 8
+  alpha: 8
+
+training:
+  output_dir: "runs/smoke_test"
+  num_train_epochs: 0.1
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 1
+  eval_steps: 5
+  save_steps: 5
+
+evaluation:
+  max_new_tokens: 256
+  sample_limit: 4
+
+report:
+  max_examples: 4
