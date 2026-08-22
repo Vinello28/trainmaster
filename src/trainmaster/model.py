@@ -94,6 +94,17 @@ class UnslothModelHandle:
         self.model.save_pretrained(str(path))
         self.processor.save_pretrained(str(path))
 
+    def save_merged(self, path: Path) -> None:
+        """Fonde un adapter LoRA nei pesi base e salva un modello standalone in
+        16-bit (nessuna quantizzazione 4-bit: sconsigliata da Unsloth per Qwen3.5,
+        stessa scelta già fatta ovunque nel progetto, vedi ``ModelConfig.load_in_4bit``).
+        ``save_pretrained_merged`` è un metodo che Unsloth applica dinamicamente
+        all'istanza del modello dopo ``from_pretrained``/``get_peft_model``, non
+        presente sulla classe ``FastLanguageModel``."""
+        path = Path(path)
+        path.mkdir(parents=True, exist_ok=True)
+        self.model.save_pretrained_merged(str(path), tokenizer=self.processor, save_method="merged_16bit")
+
 
 def load_model(
     model_config: "ModelConfig",

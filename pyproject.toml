@@ -14,6 +14,8 @@ dependencies = [
 [project.scripts]
 trainmaster-train = "trainmaster.cli.train:main"
 trainmaster-evaluate = "trainmaster.cli.evaluate:main"
+trainmaster-export = "trainmaster.cli.export:main"
+trainmaster-infer = "trainmaster.cli.infer:main"
 trainmaster-score = "trainmaster.cli.score:main"
 trainmaster-model-card = "trainmaster.cli.publish_model_card:main"
 

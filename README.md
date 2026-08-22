@@ -118,6 +118,12 @@ uv run trainmaster-evaluate --config configs/default.yaml --checkpoint runs/defa
 
 # ripunteggia/riproduce il report da predizioni già generate, senza GPU
 uv run trainmaster-score --predictions runs/default/eval/predictions.parquet -c configs/default.yaml
+
+# inferenza su una singola immagine fuori dal dataset di validazione
+uv run trainmaster-infer --config configs/default.yaml \
+    --checkpoint runs/default/checkpoint \
+    --image documento.jpg \
+    --instruction "Estrai i dati da questo documento e restituiscili in JSON."
 ```
 
 ## LoRA vs full fine-tuning
@@ -211,6 +217,25 @@ inietta `model_loader`/`trainer_builder`/`inference_runner` fake e verifica che
 dalla CI (`.github/workflows/ci.yml`): la suite gira su un runner GitHub-hosted standard,
 senza GPU.
 
+## Export: fondere l'adapter LoRA in un modello standalone
+
+I checkpoint di default sono adapter LoRA (`adapter_model.safetensors`, poche decine di
+MB): vanno sempre caricati insieme al modello base, e ricaricarli richiede Unsloth (via
+`load_model` in `model.py`, che rileva l'adapter dal `checkpoint`). Per un adapter così
+va benissimo — `trainmaster-infer`/`trainmaster-evaluate` lo usano direttamente. Se invece
+serve un artefatto **standalone** da servire con stack esterni a Unsloth
+(`transformers`/`vLLM` puri, senza dover fondere l'adapter a runtime), fondi i pesi:
+
+```bash
+uv run trainmaster-export --config configs/codex.yaml \
+    --checkpoint models/codex/checkpoint-300 \
+    --output models/codex/merged
+```
+
+Produce un modello completo in 16-bit (`~1.6GB` per Qwen3.5-0.8B, contro le decine di MB
+dell'adapter) — nessuna quantizzazione 4-bit: sconsigliata da Unsloth per Qwen3.5, stessa
+scelta già adottata ovunque nel progetto (`model.load_in_4bit: false`).
+
 ## Pubblicazione su Hugging Face
 
 Pubblicazione manuale da terminale, non da CI: niente runner self-hosted da installare
@@ -235,6 +260,16 @@ uv run hf upload <tuo-username>/<nome-modello> runs/default/checkpoint .
 `trainmaster-model-card` legge `config.yaml` e (se presente) `eval/metrics.json` del run
 e scrive la model card con iperparametri e metriche di validazione; `hf upload` carica
 `checkpoint/` così com'è.
+
+Per pubblicare invece un modello fuso con `trainmaster-export` (vedi sezione sopra), passa
+`--checkpoint-dir`: la card viene scritta direttamente lì, e `library_name` riflette
+l'assenza dell'adapter (`transformers`, non `peft`), rilevata dalla directory reale invece
+che dalla config di training:
+
+```bash
+uv run trainmaster-model-card --run-dir runs/default --checkpoint-dir runs/default/merged
+uv run hf upload <tuo-username>/<nome-modello> runs/default/merged .
+```
 
 Restano su GitHub Actions (`.github/workflows/ci.yml`) solo i test, che non richiedono
 GPU né accesso alla tua macchina — l'unica parte di CI/CD che vale la pena automatizzare

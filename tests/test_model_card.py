@@ -8,27 +8,27 @@ from trainmaster.model_card import render_model_card, write_model_card
 
 def test_render_model_card_includes_frontmatter_and_base_model(run_config_yaml: Path) -> None:
     config = load_config(run_config_yaml)
-    card = render_model_card(config, metrics=None)
+    card = render_model_card(config, metrics=None, has_adapter=True)
 
     assert card.startswith("---\n")
     assert f"base_model: {config.model.model_id}" in card
-    assert "library_name: peft" in card  # lora.enabled=True di default
+    assert "library_name: peft" in card
     assert config.name in card
 
 
-def test_render_model_card_full_finetune_uses_transformers_library(run_config_yaml: Path) -> None:
-    from trainmaster.config import parse_cli_overrides
-
-    config = load_config(run_config_yaml, parse_cli_overrides(["lora.enabled=false"]))
-    card = render_model_card(config, metrics=None)
+def test_render_model_card_without_adapter_uses_transformers_library(run_config_yaml: Path) -> None:
+    """has_adapter=False copre sia il full fine-tuning sia un checkpoint LoRA fuso con
+    trainmaster-export: in entrambi i casi non c'è più un adapter separato da dichiarare."""
+    config = load_config(run_config_yaml)
+    card = render_model_card(config, metrics=None, has_adapter=False)
 
     assert "library_name: transformers" in card
-    assert "full fine-tuning" in card
+    assert "nessun adapter separato" in card
 
 
 def test_render_model_card_omits_metrics_section_when_none(run_config_yaml: Path) -> None:
     config = load_config(run_config_yaml)
-    card = render_model_card(config, metrics=None)
+    card = render_model_card(config, metrics=None, has_adapter=True)
 
     assert "Metriche di validazione" not in card
 
@@ -45,7 +45,7 @@ def test_render_model_card_includes_metrics_table_when_present(run_config_yaml: 
         },
     }
 
-    card = render_model_card(config, metrics)
+    card = render_model_card(config, metrics, has_adapter=True)
 
     assert "Metriche di validazione" in card
     assert "cargo_manifest" in card

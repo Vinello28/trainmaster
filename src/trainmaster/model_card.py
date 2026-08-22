@@ -51,15 +51,20 @@ def _metrics_table(aggregated: dict[str, Any]) -> str:
     )
 
 
-def render_model_card(config: RunConfig, metrics: dict[str, Any] | None) -> str:
+def render_model_card(config: RunConfig, metrics: dict[str, Any] | None, *, has_adapter: bool) -> str:
     """Model card Markdown con frontmatter YAML, per un run ``config`` e le metriche
     opzionali di ``eval/metrics.json`` (``None`` se la valutazione non è ancora stata
-    eseguita: la sezione metriche viene semplicemente omessa)."""
-    library_name = "peft" if config.lora.enabled else "transformers"
+    eseguita: la sezione metriche viene semplicemente omessa).
+
+    ``has_adapter`` riflette il checkpoint che verrà davvero pubblicato (presenza di
+    ``adapter_config.json``), non ``config.lora.enabled``: un checkpoint può essere stato
+    fuso con ``trainmaster-export`` dopo un training LoRA, nel qual caso non contiene più
+    alcun adapter anche se il training lo prevedeva."""
+    library_name = "peft" if has_adapter else "transformers"
     finetune_note = (
         f"LoRA (r={config.lora.r}, alpha={config.lora.alpha}, dropout={config.lora.dropout})"
-        if config.lora.enabled
-        else "full fine-tuning (nessun adapter, tutti i pesi allenati)"
+        if has_adapter
+        else "full fine-tuning o modello fuso (nessun adapter separato)"
     )
 
     frontmatter = (

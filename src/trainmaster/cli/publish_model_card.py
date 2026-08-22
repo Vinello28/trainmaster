@@ -32,20 +32,33 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         help="Cartella del run (contiene config.yaml, checkpoint/, eval/metrics.json).",
     )
+    parser.add_argument(
+        "--checkpoint-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Cartella del checkpoint da pubblicare (default: <run-dir>/checkpoint). "
+            "Usa models/<run>/merged per un modello fuso con trainmaster-export: "
+            "la presenza di adapter_config.json lì dentro decide se la card dichiara "
+            "un adapter LoRA o un modello standalone."
+        ),
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     run_dir: Path = args.run_dir
+    checkpoint_dir: Path = args.checkpoint_dir or (run_dir / "checkpoint")
 
     config = load_config(run_dir / "config.yaml")
 
     metrics_path = run_dir / "eval" / "metrics.json"
     metrics = json.loads(metrics_path.read_text(encoding="utf-8")) if metrics_path.exists() else None
 
-    card = render_model_card(config, metrics)
-    card_path = run_dir / "checkpoint" / "README.md"
+    has_adapter = (checkpoint_dir / "adapter_config.json").exists()
+    card = render_model_card(config, metrics, has_adapter=has_adapter)
+    card_path = checkpoint_dir / "README.md"
     write_model_card(card_path, card)
     print(f"Model card scritta in {card_path}")
     return 0
