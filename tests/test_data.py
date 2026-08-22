@@ -59,3 +59,34 @@ def test_build_conversations_from_loaded_dataset(dataset_dir: Path) -> None:
 
     assert len(conversations) == len(dataset)
     assert all(set(c.keys()) == {"messages"} for c in conversations)
+
+
+class _CountingDataset:
+    """Sorgente fake per accertare che ``build_conversations`` non decodifichi/acceda a
+    un campione finché non viene letto per indice (RAM regression del 2026-08-22:
+    build_conversations era eager e materializzava l'intero split in anticipo)."""
+
+    def __init__(self, rows: list[dict[str, Any]]) -> None:
+        self._rows = rows
+        self.getitem_calls = 0
+
+    def __len__(self) -> int:
+        return len(self._rows)
+
+    def __getitem__(self, index: int) -> dict[str, Any]:
+        self.getitem_calls += 1
+        return self._rows[index]
+
+
+def test_build_conversations_is_lazy(sample_rows: list[dict[str, Any]]) -> None:
+    source = _CountingDataset(sample_rows)
+    conversations = build_conversations(source)
+
+    assert len(conversations) == len(sample_rows)
+    assert source.getitem_calls == 0
+
+    conversations[0]
+    assert source.getitem_calls == 1
+
+    conversations[1]
+    assert source.getitem_calls == 2

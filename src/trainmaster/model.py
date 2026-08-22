@@ -29,7 +29,7 @@ from __future__ import annotations
 import warnings
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Sequence
 
 if TYPE_CHECKING:
     from PIL.Image import Image
@@ -164,8 +164,8 @@ def load_model(
 
 def build_trainer(
     handle: UnslothModelHandle,
-    train_conversations: list[dict[str, Any]],
-    eval_conversations: list[dict[str, Any]] | None,
+    train_conversations: Sequence[dict[str, Any]],
+    eval_conversations: Sequence[dict[str, Any]] | None,
     training: "TrainingConfig",
 ) -> Any:
     """Costruisce l'``SFTTrainer`` di trl con il collator vision di Unsloth.
